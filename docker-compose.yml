@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  pc-optimizer-app:
+    build: .
+    container_name: pc_optimizer_prod
+    ports:
+      - "8080:80" # Podrás ver la app en localhost:8080
+    restart: always
