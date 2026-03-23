@@ -1,64 +1,112 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { PCComponent } from '../types/pc';
+import { MOCK_COMPONENTS } from '../data/components';
 
-const MOCK_COMPONENTS: PCComponent[] = [
-  { id: '1', name: 'AMD Ryzen 5 5600X', category: 'CPU', price: 200 },
-  { id: '2', name: 'NVIDIA RTX 3060', category: 'GPU', price: 350 },
-  { id: '3', name: '16GB DDR4 RAM', category: 'RAM', price: 80 },
-];
+// Importación de componentes de arquitectura SOLID
+import Header from './Header';
+import ComponentCard from './ComponentCard';
+import BuildSummary from './BuildSummary';
+import CategoryFilters, { FilterCategory } from './CategoryFilters';
 
 const BudgetCalculator: React.FC = () => {
+  // --- ESTADO ---
   const [selectedItems, setSelectedItems] = useState<PCComponent[]>([]);
+  const [activeCategory, setActiveCategory] = useState<FilterCategory>('All');
 
-  // Tipamos el parámetro 'item' y el retorno 'void'
-  const addItem = (item: PCComponent): void => {
-    if (!selectedItems.find((i: PCComponent) => i.id === item.id)) {
-      setSelectedItems((prev: PCComponent[]) => [...prev, item]);
-    }
-  };
+  // --- LÓGICA DE NEGOCIO (Callbacks Optimizados) ---
 
-  const removeItem = (id: string): void => {
-    setSelectedItems((prev: PCComponent[]) => prev.filter((item: PCComponent) => item.id !== id));
-  };
+  /**
+   * SENIOR TIP: useCallback
+   * Al estar pasando estas funciones a componentes memoizados (ComponentCard),
+   * necesitamos asegurar que la referencia de la función sea estable para evitar
+   * re-renders innecesarios de toda la lista de productos.
+   */
+  const addItem = useCallback((item: PCComponent): void => {
+    setSelectedItems((prev) => {
+      if (prev.find((i) => i.id === item.id)) return prev;
+      return [...prev, item];
+    });
+  }, []);
 
-  // Tipamos el acumulador y el item en el reduce
+  const removeItem = useCallback((id: string): void => {
+    setSelectedItems((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const handleCategoryChange = useCallback((category: FilterCategory): void => {
+    setActiveCategory(category);
+  }, []);
+
+  // --- DATOS DERIVADOS (Performance con useMemo) ---
+
+  /**
+   * Filtramos los componentes basándonos en la categoría activa.
+   * Solo se vuelve a calcular si cambia 'activeCategory'.
+   */
+  const filteredComponents = useMemo(() => {
+    if (activeCategory === 'All') return MOCK_COMPONENTS;
+    return MOCK_COMPONENTS.filter((item) => item.category === activeCategory);
+  }, [activeCategory]);
+
+  /**
+   * Calculamos el total del presupuesto.
+   * Solo se vuelve a calcular si cambia 'selectedItems'.
+   */
   const totalBudget = useMemo((): number => {
-    return selectedItems.reduce((acc: number, item: PCComponent) => acc + item.price, 0);
+    return selectedItems.reduce((acc, item) => acc + item.price, 0);
   }, [selectedItems]);
 
+  // --- RENDER ---
   return (
-    <div className="p-6 max-w-2xl mx-auto bg-white rounded-xl shadow-md space-y-4">
-      <h1 className="text-2xl font-bold text-gray-800">Presupuesto PC Master</h1>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <section>
-          <h2 className="font-semibold mb-2">Disponibles</h2>
-          {MOCK_COMPONENTS.map((item: PCComponent) => (
-            <button
-              key={item.id}
-              onClick={() => addItem(item)}
-              className="block w-full text-left p-2 mb-2 border rounded hover:bg-blue-50 transition"
-            >
-              {item.name} - ${item.price}
-            </button>
-          ))}
-        </section>
+        <Header />
 
-        <section className="bg-gray-50 p-4 rounded-lg">
-          <h2 className="font-semibold mb-2">Tu Configuración</h2>
-          {selectedItems.length === 0 && <p className="text-sm text-gray-500">No hay componentes seleccionados.</p>}
-          <ul>
-            {selectedItems.map((item: PCComponent) => (
-              <li key={item.id} className="flex justify-between text-sm mb-1">
-                <span>{item.name}</span>
-                <button onClick={() => removeItem(item.id)} className="text-red-500 ml-2">x</button>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 border-t pt-2 font-bold text-lg">
-            Total: ${totalBudget}
-          </div>
-        </section>
+        <div className="grid grid-cols-1 md:grid-cols-[2fr,1fr] gap-8">
+
+          {/* Columna Izquierda: Catálogo de Productos */}
+          <section className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-fit">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+              <h2 className="text-2xl font-bold text-gray-900">🛒 Componentes</h2>
+              <span className="text-sm font-medium text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
+                {filteredComponents.length} productos encontrados
+              </span>
+            </div>
+
+            {/* Filtros de Categoría */}
+            <CategoryFilters
+              selectedCategory={activeCategory}
+              onCategoryChange={handleCategoryChange}
+            />
+
+            {/* Listado dinámico */}
+            <div className="space-y-4">
+              {filteredComponents.length > 0 ? (
+                filteredComponents.map((item) => (
+                  <ComponentCard
+                    key={item.id}
+                    item={item}
+                    onAdd={addItem}
+                  />
+                ))
+              ) : (
+                <div className="py-20 text-center">
+                  <p className="text-gray-400 font-medium italic">
+                    No se encontraron componentes en esta categoría.
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Columna Derecha: Resumen de la Build (Sticky) */}
+          <BuildSummary
+            selectedItems={selectedItems}
+            onRemove={removeItem}
+            total={totalBudget}
+          />
+
+        </div>
       </div>
     </div>
   );
